@@ -1,0 +1,177 @@
+/* reqrev annotator styles — injected into requirement docs */
+
+html.rr-active body {
+  padding-right: 400px;
+}
+
+/* ---- highlights ---- */
+mark.rr-hl {
+  cursor: pointer;
+  padding: 1px 0;
+  border-radius: 2px;
+  color: inherit;
+}
+mark.rr-comment  { background: #fdf0a8; box-shadow: 0 2px 0 #e0c93a; }
+mark.rr-edit     { background: #ffd9cf; box-shadow: 0 2px 0 #e08a72; }
+mark.rr-question { background: #d4e5fb; box-shadow: 0 2px 0 #7ba7d9; }
+mark.rr-hl.rr-resolved {
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 2px dotted #9ab5a8;
+}
+mark.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
+@keyframes rr-pulse {
+  0% { outline: 3px solid rgba(46, 94, 78, .8); outline-offset: 2px; }
+  100% { outline: 3px solid rgba(46, 94, 78, 0); outline-offset: 6px; }
+}
+
+/* ---- floating comment button ---- */
+#rr-fab {
+  position: fixed;
+  z-index: 100000;
+  font: 600 13px/1 system-ui, sans-serif;
+  background: #20241f;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 14px;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .25);
+}
+#rr-fab:hover { background: #2e5e4e; }
+
+/* ---- sidebar ---- */
+#rr-sidebar {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 380px;
+  z-index: 99999;
+  background: #ffffff;
+  border-left: 1px solid #d8d7cc;
+  overflow-y: auto;
+  font: 400 13.5px/1.5 system-ui, sans-serif;
+  color: #20241f;
+  box-sizing: border-box;
+}
+#rr-sidebar *, #rr-sidebar *::before, #rr-sidebar *::after { box-sizing: border-box; }
+
+#rr-sidebar header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  background: #fafaf6;
+  border-bottom: 1px solid #e2e1d7;
+  padding: 14px 16px;
+  z-index: 1;
+}
+#rr-sidebar .rr-title { font-weight: 700; font-size: 15px; }
+#rr-count { color: #5c6058; font-size: 12px; }
+#rr-status { margin-left: auto; font-size: 12px; color: #5c6058; }
+#rr-status.rr-ok { color: #2e5e4e; }
+#rr-status.rr-err { color: #a03123; font-weight: 600; }
+#rr-sidebar header a { color: #35566b; font-size: 12px; }
+
+#rr-hint { color: #5c6058; padding: 14px 16px; margin: 0; }
+#rr-cards { padding: 10px 12px 40px; }
+
+/* ---- cards ---- */
+.rr-card {
+  border: 1px solid #e2e1d7;
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px 12px;
+  margin: 0 0 10px;
+  cursor: pointer;
+}
+.rr-card.rr-comment  { border-left-color: #e0c93a; }
+.rr-card.rr-edit     { border-left-color: #e08a72; }
+.rr-card.rr-question { border-left-color: #7ba7d9; }
+.rr-card.rr-resolved { opacity: .6; }
+.rr-card.rr-flash { animation: rr-card-pulse 1.2s ease-out 1; }
+@keyframes rr-card-pulse {
+  0% { box-shadow: 0 0 0 3px rgba(46, 94, 78, .55); }
+  100% { box-shadow: 0 0 0 3px rgba(46, 94, 78, 0); }
+}
+
+.rr-top { display: flex; gap: 6px; margin-bottom: 4px; }
+.rr-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #5c6058;
+  background: #f0f0e9;
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.rr-badge-res { background: #e9f1ec; color: #2e5e4e; }
+.rr-sec { color: #5c6058; font-size: 11.5px; margin-bottom: 4px; }
+
+.rr-card blockquote, .rr-editor blockquote {
+  margin: 4px 0 8px;
+  padding: 5px 10px;
+  border-left: 3px solid #c9c8bb;
+  background: #f4f4ec;
+  color: #3c3c34;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.rr-text { white-space: pre-wrap; }
+.rr-text em { color: #8a8a7e; }
+.rr-repl {
+  margin-top: 6px;
+  padding: 6px 9px;
+  background: #e9f1ec;
+  border-radius: 4px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+}
+.rr-orphan {
+  color: #a03123;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.rr-actions { display: flex; gap: 6px; margin-top: 8px; }
+.rr-actions button {
+  font: 600 11.5px system-ui, sans-serif;
+  color: #35566b;
+  background: #fff;
+  border: 1px solid #d8d7cc;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.rr-actions button:hover { background: #f0f0e9; }
+.rr-actions button.rr-primary {
+  background: #2e5e4e;
+  border-color: #2e5e4e;
+  color: #fff;
+}
+.rr-actions button.rr-primary:hover { background: #1c3a30; }
+
+/* ---- editor ---- */
+.rr-editor select,
+.rr-editor textarea {
+  width: 100%;
+  font: 400 13px/1.45 system-ui, sans-serif;
+  border: 1px solid #d8d7cc;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 4px 0;
+  background: #fff;
+  color: #20241f;
+}
+.rr-editor textarea { resize: vertical; }
+.rr-editor textarea:focus, .rr-editor select:focus {
+  outline: 2px solid #2e5e4e33;
+  border-color: #2e5e4e;
+}
+
+@media (max-width: 1100px) {
+  html.rr-active body { padding-right: 340px; }
+  #rr-sidebar { width: 330px; }
+}
