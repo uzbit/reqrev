@@ -291,15 +291,18 @@ def main():
     ap = argparse.ArgumentParser(description="reqrev — local requirement review annotator")
     ap.add_argument("--docs", default=str((APP_DIR / "../srts/requirements").resolve()),
                     help="directory containing requirement .html files")
-    ap.add_argument("--reviews", default=str(APP_DIR / "reviews"),
-                    help="directory where .review.html files are written")
+    ap.add_argument("--reviews", default=None,
+                    help="directory where .review.html files are written "
+                         "(default: <docs parent>/reviews)")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
 
     docs_dir = Path(args.docs).resolve()
-    reviews_dir = Path(args.reviews).resolve()
     if not docs_dir.is_dir():
         sys.exit(f"docs directory not found: {docs_dir}")
+    reviews_dir = (
+        Path(args.reviews).resolve() if args.reviews else docs_dir.parent / "reviews"
+    )
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(docs_dir, reviews_dir))
     print(f"reqrev serving {docs_dir}")

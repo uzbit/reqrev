@@ -14,8 +14,9 @@ python3 server.py
 # then open http://localhost:8765/
 ```
 
-Defaults: serves docs from `../srts/requirements`, writes reviews to
-`./reviews`. Override with:
+Defaults: serves docs from `../srts/requirements`, writes reviews to a
+`reviews/` directory next to the docs directory (i.e. `../srts/reviews`).
+Override with:
 
 ```sh
 python3 server.py --docs /path/to/docs --reviews /path/to/reviews --port 8765
