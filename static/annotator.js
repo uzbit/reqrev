@@ -8,6 +8,7 @@
   const CONTEXT = 32;
 
   let annotations = [];
+  let meta = { status: "in-progress", docRev: null };
   let editingId = null;
   let editingIsNew = false;
   let pendingSel = null;
@@ -175,6 +176,7 @@
     ui.hint.style.display = annotations.length ? "none" : "";
     ui.cards.innerHTML = "";
     for (const ann of annotations) ui.cards.appendChild(cardFor(ann));
+    renderMeta();
   }
 
   function cardFor(ann) {
@@ -406,22 +408,67 @@
     saveTimer = setTimeout(saveNow, 400);
   }
 
-  async function saveNow() {
+  async function postReview(complete) {
     const clean = annotations.map((a) => {
       const { _start, ...rest } = a;
       return rest;
     });
+    const r = await fetch("/api/review/" + encodeURIComponent(DOC), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doc: DOC, annotations: clean, complete: !!complete }),
+    });
+    const data = await r.json().catch(() => ({ ok: false, error: "bad server response" }));
+    if (!r.ok || !data.ok) throw new Error(data.error || "HTTP " + r.status);
+    if (data.stamps)
+      for (const a of annotations) if (data.stamps[a.id]) a.docRev = data.stamps[a.id];
+    meta.status = data.status || "in-progress";
+    meta.docRev = data.docRev || null;
+    renderMeta();
+    return data;
+  }
+
+  async function saveNow() {
     try {
-      const r = await fetch("/api/review/" + encodeURIComponent(DOC), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ doc: DOC, annotations: clean }),
-      });
-      if (!r.ok) throw new Error("HTTP " + r.status);
+      await postReview(false);
       setStatus("saved ✓", "rr-ok");
       setTimeout(() => setStatus(""), 2000);
     } catch (err) {
       setStatus("save failed ✗", "rr-err");
+    }
+  }
+
+  async function completeReview() {
+    if (
+      !confirm(
+        "Mark this review complete?\n\nThis records the document's git revision " +
+          "in the review file. It fails if annotations span multiple revisions " +
+          "or the document has uncommitted changes."
+      )
+    )
+      return;
+    clearTimeout(saveTimer);
+    try {
+      await postReview(true);
+      setStatus("review complete ✓", "rr-ok");
+    } catch (err) {
+      alert("Cannot complete review:\n\n" + err.message);
+      setStatus("not completed ✗", "rr-err");
+    }
+  }
+
+  function renderMeta() {
+    const rev = meta.docRev ? meta.docRev.slice(0, 12) : null;
+    if (meta.status === "complete") {
+      ui.rev.innerHTML = "✓ complete @ <code>" + esc(rev || "?") + "</code>";
+      ui.rev.className = "rr-rev-done";
+      ui.completeBtn.style.display = "none";
+    } else {
+      ui.rev.innerHTML = rev
+        ? "in progress @ <code>" + esc(rev) + "</code>"
+        : "in progress";
+      ui.rev.className = "";
+      ui.completeBtn.style.display = annotations.length ? "" : "none";
     }
   }
 
@@ -432,10 +479,16 @@
     sb.id = "rr-sidebar";
     sb.innerHTML = `
       <header>
-        <span class="rr-title">Review</span>
-        <span id="rr-count"></span>
-        <span id="rr-status"></span>
-        <a href="/" title="back to document list">index</a>
+        <div class="rr-h1">
+          <span class="rr-title">Review</span>
+          <span id="rr-count"></span>
+          <span id="rr-status"></span>
+          <a href="/" title="back to document list">index</a>
+        </div>
+        <div class="rr-h2">
+          <span id="rr-rev"></span>
+          <button id="rr-complete" title="record the document's git revision and mark this review complete">✓ Review complete</button>
+        </div>
       </header>
       <p id="rr-hint">Select text in the document to add a comment,
         suggested edit, or question. Everything autosaves to the review file.</p>
@@ -458,7 +511,10 @@
       status: sb.querySelector("#rr-status"),
       count: sb.querySelector("#rr-count"),
       hint: sb.querySelector("#rr-hint"),
+      rev: sb.querySelector("#rr-rev"),
+      completeBtn: sb.querySelector("#rr-complete"),
     };
+    ui.completeBtn.addEventListener("click", completeReview);
 
     document.addEventListener("mouseup", onMouseUp);
     window.addEventListener("scroll", hideFab, { passive: true });
@@ -486,6 +542,8 @@
       const r = await fetch("/api/review/" + encodeURIComponent(DOC));
       const data = await r.json();
       annotations = Array.isArray(data.annotations) ? data.annotations : [];
+      meta.status = data.status || "in-progress";
+      meta.docRev = data.docRev || null;
     } catch (err) {
       annotations = [];
     }

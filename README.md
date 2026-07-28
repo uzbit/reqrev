@@ -31,6 +31,13 @@ python3 server.py --docs /path/to/docs --reviews /path/to/reviews --port 8765
 4. Everything autosaves to `reviews/<doc>.review.html`. Highlights and the
    sidebar restore when you reopen the doc. Resolve/reopen/delete from the
    sidebar cards; click a card to jump to its passage and vice versa.
+5. When done, click **✓ Review complete** — this records the document's git
+   revision and completion time in the review file. Completion is refused if
+   the document has uncommitted changes, or if annotations were made against
+   different revisions of the document (each annotation is stamped with the
+   doc's revision when first saved; a `-dirty` suffix means the doc had
+   uncommitted changes at that moment). Editing the review afterwards flips
+   it back to in-progress.
 
 ## Review file format
 
@@ -53,6 +60,12 @@ Annotation fields:
 | `replacement` | for `type: "edit"`, the proposed replacement text |
 | `resolved` | whether the item has been addressed |
 | `created` / `updated` | ISO-8601 UTC timestamps |
+| `docRev` | git revision of the source doc the annotation was made against (`-dirty` suffix = uncommitted changes were present) |
+
+Top-level fields: `status` (`in-progress` or `complete`), `docRev` (the single
+revision all annotations share, once uniform), and `completedAt`. A `complete`
+review is guaranteed to have all annotations on one committed revision — check
+out that revision to see exactly what the reviewer saw.
 
 **For Claude:** to act on a review, parse the JSON block from the
 `.review.html` file. Each annotation's `exact` text locates the passage in the

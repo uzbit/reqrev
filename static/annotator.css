@@ -58,14 +58,42 @@ mark.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
 #rr-sidebar header {
   position: sticky;
   top: 0;
+  background: #fafaf6;
+  border-bottom: 1px solid #e2e1d7;
+  padding: 12px 16px;
+  z-index: 1;
+}
+#rr-sidebar .rr-h1 {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  background: #fafaf6;
-  border-bottom: 1px solid #e2e1d7;
-  padding: 14px 16px;
-  z-index: 1;
 }
+#rr-sidebar .rr-h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: 12px;
+  color: #5c6058;
+}
+#rr-rev code {
+  font: 500 11px ui-monospace, monospace;
+  background: #f0f0e9;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+#rr-rev.rr-rev-done { color: #2e5e4e; font-weight: 600; }
+#rr-complete {
+  margin-left: auto;
+  font: 600 11.5px system-ui, sans-serif;
+  color: #fff;
+  background: #2e5e4e;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+#rr-complete:hover { background: #1c3a30; }
 #rr-sidebar .rr-title { font-weight: 700; font-size: 15px; }
 #rr-count { color: #5c6058; font-size: 12px; }
 #rr-status { margin-left: auto; font-size: 12px; color: #5c6058; }

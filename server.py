@@ -14,6 +14,7 @@ import argparse
 import html
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -41,6 +42,28 @@ def review_path(reviews_dir, doc_name):
     return reviews_dir / (Path(doc_name).stem + ".review.html")
 
 
+def git_doc_state(docs_dir, name):
+    """Return (rev, dirty, error): last commit touching the doc, whether the
+    working copy differs from it, and an error string if git info is unavailable."""
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(docs_dir), "log", "-1", "--format=%H", "--", name],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None, False, "git is not available"
+    if r.returncode != 0:
+        return None, False, "docs directory is not in a git repository"
+    rev = r.stdout.strip()
+    if not rev:
+        return None, False, f"{name} is not tracked in git (commit it first)"
+    s = subprocess.run(
+        ["git", "-C", str(docs_dir), "status", "--porcelain", "--", name],
+        capture_output=True, text=True, timeout=10,
+    )
+    return rev, bool(s.stdout.strip()), None
+
+
 def load_review(reviews_dir, doc_name):
     path = review_path(reviews_dir, doc_name)
     if not path.exists():
@@ -54,10 +77,32 @@ def load_review(reviews_dir, doc_name):
     return {"version": 1, "doc": doc_name, "annotations": []}
 
 
-def render_review_html(doc_name, annotations, updated):
+def render_review_html(doc_name, data):
+    annotations = data.get("annotations", [])
+    updated = data.get("updated", "")
     stem = Path(doc_name).stem
     open_n = sum(1 for a in annotations if not a.get("resolved"))
     resolved_n = len(annotations) - open_n
+
+    status = data.get("status", "in-progress")
+    doc_rev = data.get("docRev") or ""
+    revs = sorted({a.get("docRev") for a in annotations if a.get("docRev")})
+    if status == "complete":
+        status_html = '<span class="done">✓ review complete</span> ' + html.escape(
+            data.get("completedAt") or ""
+        )
+        if doc_rev:
+            status_html += f" · document revision <code>{html.escape(doc_rev)}</code>"
+    else:
+        status_html = "review in progress"
+        if len(revs) == 1:
+            status_html += f" · document revision <code>{html.escape(revs[0])}</code>"
+        elif len(revs) > 1:
+            status_html += (
+                ' · <span class="warn">⚠ annotations span multiple document revisions: '
+                + html.escape(", ".join(r[:12] for r in revs))
+                + "</span>"
+            )
 
     articles = []
     for a in sorted(annotations, key=lambda a: a.get("start") or 0):
@@ -85,11 +130,7 @@ def render_review_html(doc_name, annotations, updated):
 </article>"""
         )
 
-    payload = json.dumps(
-        {"version": 1, "doc": doc_name, "updated": updated, "annotations": annotations},
-        indent=2,
-        ensure_ascii=False,
-    ).replace("<", "\\u003c")
+    payload = json.dumps(data, indent=2, ensure_ascii=False).replace("<", "\\u003c")
 
     body = "\n".join(articles) if articles else "<p><em>No annotations.</em></p>"
     return f"""<!DOCTYPE html>
@@ -116,6 +157,9 @@ blockquote{{margin:8px 0;padding:8px 14px;border-left:3px solid #c9c8bb;backgrou
 .comment{{margin:10px 0 4px;white-space:pre-wrap}}
 .repl{{margin:8px 0 4px;padding:8px 12px;background:#e9f1ec;border-radius:4px;white-space:pre-wrap;font-size:14px}}
 .meta{{color:#8a8a7e;font-size:11.5px;margin:10px 0 0}}
+.done{{color:#2e5e4e;font-weight:600}}
+.warn{{color:#a03123}}
+code{{font:500 12px ui-monospace,monospace;background:#f0f0e9;padding:1px 5px;border-radius:3px}}
 </style>
 </head>
 <body>
@@ -125,13 +169,19 @@ blockquote{{margin:8px 0;padding:8px 14px;border-left:3px solid #c9c8bb;backgrou
   JSON inside the script element with id "reqrev-data" at the bottom.
   Each annotation: {{ exact, prefix, suffix, start, section, sectionTitle,
   type: comment|edit|question, comment, replacement, resolved, created,
-  updated }} — `exact` quotes the reviewed passage in the source document,
-  `prefix`/`suffix` give surrounding context for locating it, and for
-  type "edit" the `replacement` field holds the proposed new text.
+  updated, docRev }} — `exact` quotes the reviewed passage in the source
+  document, `prefix`/`suffix` give surrounding context for locating it, and
+  for type "edit" the `replacement` field holds the proposed new text.
+  `docRev` is the git revision of the source document the annotation was made
+  against ("-dirty" suffix = uncommitted changes were present). Top-level
+  `status` is "in-progress" or "complete"; when complete, `docRev` and
+  `completedAt` record the reviewed revision and completion time. All
+  annotations in a complete review are guaranteed to share one revision.
 -->
 <h1>Review: {html.escape(stem)}</h1>
 <p class="summary">source: {html.escape(doc_name)} · updated {html.escape(updated)} ·
-{len(annotations)} annotation(s) — {open_n} open, {resolved_n} resolved</p>
+{len(annotations)} annotation(s) — {open_n} open, {resolved_n} resolved<br>
+{status_html}</p>
 {body}
 <script type="application/json" id="reqrev-data">
 {payload}
@@ -190,8 +240,11 @@ def make_handler(docs_dir, reviews_dir):
                 open_n = sum(1 for a in anns if not a.get("resolved"))
                 counts = "—"
                 review_link = ""
-                if anns:
+                if anns or data.get("status") == "complete":
                     counts = f"{open_n} open / {len(anns) - open_n} resolved"
+                    if data.get("status") == "complete":
+                        counts = (f'<span class="done">✓ complete @ '
+                                  f'{html.escape((data.get("docRev") or "")[:8])}</span> · {counts}')
                     rfile = review_path(reviews_dir, doc.name).name
                     review_link = f'<a class="rev" href="/reviews/{html.escape(rfile)}">review file</a>'
                 rows.append(
@@ -211,6 +264,7 @@ li{{display:flex;gap:14px;align-items:baseline;padding:11px 4px;border-bottom:1p
 a.doc{{color:#2e5e4e;font-weight:600;text-decoration:none}}
 a.doc:hover{{text-decoration:underline}}
 .counts{{color:#5c6058;font-size:13px;margin-left:auto}}
+.counts .done{{color:#2e5e4e;font-weight:600}}
 a.rev{{color:#35566b;font-size:13px}}
 </style></head><body>
 <h1>reqrev</h1>
@@ -271,18 +325,55 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
                 data = json.loads(self.rfile.read(length))
                 annotations = data["annotations"]
                 assert isinstance(annotations, list)
+                complete = bool(data.get("complete"))
             except (ValueError, KeyError, AssertionError):
                 return self.send_json({"ok": False, "error": "bad payload"}, 400)
+
+            rev, dirty, git_err = git_doc_state(docs_dir, name)
+            stamp = (rev + ("-dirty" if dirty else "")) if rev else None
+            stamps = {}
+            for a in annotations:
+                if isinstance(a, dict) and stamp and not a.get("docRev"):
+                    a["docRev"] = stamp
+                    stamps[a.get("id")] = stamp
+            revs = sorted({a.get("docRev") for a in annotations
+                           if isinstance(a, dict) and a.get("docRev")})
+
             path = review_path(reviews_dir, name)
-            if not annotations:
-                path.unlink(missing_ok=True)
-                return self.send_json({"ok": True, "deleted": True})
-            reviews_dir.mkdir(parents=True, exist_ok=True)
+            if complete:
+                err = None
+                if git_err:
+                    err = git_err
+                elif dirty:
+                    err = (f"{name} has uncommitted changes — commit the document "
+                           "before completing the review")
+                elif any(r.endswith("-dirty") for r in revs):
+                    err = ("some annotations were made while the document had "
+                           "uncommitted changes (revision marked -dirty); delete and "
+                           "re-add them against a committed document")
+                elif len(revs) > 1:
+                    err = ("annotations span multiple document revisions: "
+                           + ", ".join(r[:12] for r in revs))
+                if err:
+                    return self.send_json({"ok": False, "error": err}, 409)
+                status, completed_at = "complete", now_iso()
+                doc_rev = revs[0] if revs else rev
+            else:
+                status, completed_at = "in-progress", None
+                doc_rev = revs[0] if len(revs) == 1 else None
+                if not annotations:
+                    path.unlink(missing_ok=True)
+                    return self.send_json({"ok": True, "deleted": True,
+                                           "status": status})
+
             updated = now_iso()
-            path.write_text(
-                render_review_html(name, annotations, updated), encoding="utf-8"
-            )
-            self.send_json({"ok": True, "file": str(path), "updated": updated})
+            out = {"version": 1, "doc": name, "updated": updated, "status": status,
+                   "docRev": doc_rev, "completedAt": completed_at,
+                   "annotations": annotations}
+            reviews_dir.mkdir(parents=True, exist_ok=True)
+            path.write_text(render_review_html(name, out), encoding="utf-8")
+            self.send_json({"ok": True, "file": str(path), "updated": updated,
+                            "status": status, "docRev": doc_rev, "stamps": stamps})
 
     return Handler
 
