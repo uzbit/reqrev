@@ -101,6 +101,8 @@ def render_review_html(doc_name, data):
         )
         if doc_rev:
             status_html += f" · document revision <code>{html.escape(doc_rev)}</code>"
+        if len(revs) > 1:
+            status_html += f" · reviewed across {len(revs)} document revisions"
     else:
         status_html = "review in progress"
         if len(revs) == 1:
@@ -196,8 +198,9 @@ code{{font:500 12px ui-monospace,monospace;background:#f0f0e9;padding:1px 5px;bo
   `docRev` is the git revision of the source document the annotation was made
   against ("-dirty" suffix = uncommitted changes were present). Top-level
   `status` is "in-progress" or "complete"; when complete, `docRev` and
-  `completedAt` record the reviewed revision and completion time. All
-  annotations in a complete review are guaranteed to share one revision.
+  `completedAt` record the document's revision at completion time. Each
+  annotation keeps the revision it was made against — reviews addressed in
+  rounds may span several.
 -->
 <h1>Review: {html.escape(stem)}</h1>
 <p class="summary">source: {html.escape(doc_name)} · updated {html.escape(updated)} ·
@@ -370,23 +373,29 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
 
             path = review_path(reviews_dir, name)
             if complete:
+                # Resolved annotations may carry -dirty or older stamps: reviews
+                # addressed in rounds legitimately accrete annotations against
+                # successive revisions. Completion certifies the document's
+                # revision now; each annotation keeps the stamp of what the
+                # reviewer saw when it was made.
                 err = None
+                open_dirty = [a for a in annotations
+                              if isinstance(a, dict) and not a.get("resolved")
+                              and (a.get("docRev") or "").endswith("-dirty")]
                 if git_err:
                     err = git_err
                 elif dirty:
                     err = (f"{name} has uncommitted changes — commit the document "
                            "before completing the review")
-                elif any(r.endswith("-dirty") for r in revs):
-                    err = ("some annotations were made while the document had "
-                           "uncommitted changes (revision marked -dirty); delete and "
-                           "re-add them against a committed document")
-                elif len(revs) > 1:
-                    err = ("annotations span multiple document revisions: "
-                           + ", ".join(r[:12] for r in revs))
+                elif open_dirty:
+                    err = ("some unresolved annotations were made while the "
+                           "document had uncommitted changes (revision marked "
+                           "-dirty); resolve them, or delete and re-add them "
+                           "against a committed document")
                 if err:
                     return self.send_json({"ok": False, "error": err}, 409)
                 status, completed_at = "complete", now_iso()
-                doc_rev = revs[0] if revs else rev
+                doc_rev = rev
             else:
                 status, completed_at = "in-progress", None
                 doc_rev = revs[0] if len(revs) == 1 else None
