@@ -204,6 +204,13 @@
           ? `<div class="rr-repl"><b>Proposed:</b> ${esc(ann.replacement)}</div>`
           : ""
       }
+      ${
+        ann.response
+          ? `<div class="rr-resp"><b>Response — ${esc(ann.disposition || "addressed")}:</b> ${esc(ann.response)}${
+              ann.changes ? `<br><em>Changes:</em> ${esc(ann.changes)}` : ""
+            }</div>`
+          : ""
+      }
       <div class="rr-actions">
         <button data-act="edit">Edit</button>
         <button data-act="resolve">${ann.resolved ? "Reopen" : "Resolve"}</button>

@@ -157,6 +157,16 @@ mark.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
   font-size: 12.5px;
   white-space: pre-wrap;
 }
+.rr-resp {
+  margin-top: 6px;
+  padding: 6px 9px;
+  background: #e9f1ec;
+  border-left: 3px solid #2e5e4e;
+  border-radius: 4px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+}
+.rr-resp em { color: #5c6058; }
 .rr-orphan {
   color: #a03123;
   font-size: 12px;
