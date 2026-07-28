@@ -38,6 +38,16 @@ python3 server.py --docs /path/to/docs --reviews /path/to/reviews --port 8765
    doc's revision when first saved; a `-dirty` suffix means the doc had
    uncommitted changes at that moment). Editing the review afterwards flips
    it back to in-progress.
+6. Hand the completed review to whoever owns the document — human or Claude.
+   They address each item (apply suggested edits, answer questions), record
+   `disposition`, `response`, and `changes` on the annotation, and set
+   `resolved: true`. The rendered report shows these as response blocks
+   beneath each reviewer note.
+
+> **Tip:** commit the requirement docs *before* starting a review. Annotations
+> made while a doc has uncommitted changes are stamped `-dirty` and will block
+> **✓ Review complete** until they are deleted and re-added against a
+> committed revision.
 
 ## Review file format
 
