@@ -106,6 +106,13 @@
       parent.removeChild(m);
       parent.normalize();
     });
+    document.querySelectorAll(".rr-hl-svg").forEach((el) => {
+      [...el.classList]
+        .filter((c) => c === "rr-hl-svg" || c === "rr-resolved" || c.startsWith("rr-svg-"))
+        .forEach((c) => el.classList.remove(c));
+      delete el.dataset.rrId;
+      if (!el.classList.length) el.removeAttribute("class");
+    });
   }
 
   function wrapRange(idx, start, end, ann) {
@@ -113,6 +120,15 @@
       const a = Math.max(start, s.start);
       const b = Math.min(end, s.end);
       if (a >= b) continue;
+      const parent = s.node.parentElement;
+      if (parent && parent.closest("svg")) {
+        // an HTML <mark> inside SVG is a foreign element the renderer won't
+        // draw — tint the enclosing SVG text element instead of wrapping
+        parent.classList.add("rr-hl-svg", "rr-svg-" + (ann.type || "comment"));
+        if (ann.resolved) parent.classList.add("rr-resolved");
+        parent.dataset.rrId = ann.id;
+        continue;
+      }
       let target = s.node;
       if (a - s.start > 0) target = target.splitText(a - s.start);
       if (b - a < target.nodeValue.length) target.splitText(b - a);
@@ -299,16 +315,15 @@
   }
 
   function scrollToMark(id) {
-    const mark = document.querySelector(`mark.rr-hl[data-rr-id="${id}"]`);
+    const sel = `mark.rr-hl[data-rr-id="${id}"], .rr-hl-svg[data-rr-id="${id}"]`;
+    const mark = document.querySelector(sel);
     if (!mark) return;
     mark.scrollIntoView({ block: "center", behavior: "smooth" });
-    document
-      .querySelectorAll(`mark.rr-hl[data-rr-id="${id}"]`)
-      .forEach((m) => {
-        m.classList.remove("rr-flash");
-        void m.offsetWidth;
-        m.classList.add("rr-flash");
-      });
+    document.querySelectorAll(sel).forEach((m) => {
+      m.classList.remove("rr-flash");
+      void m.getBoundingClientRect();
+      m.classList.add("rr-flash");
+    });
   }
 
   function focusCard(id) {
@@ -540,7 +555,10 @@
     document.addEventListener("mouseup", onMouseUp);
     window.addEventListener("scroll", hideFab, { passive: true });
     document.addEventListener("click", (e) => {
-      const m = e.target instanceof HTMLElement ? e.target.closest("mark.rr-hl") : null;
+      const m =
+        e.target instanceof Element
+          ? e.target.closest("mark.rr-hl, .rr-hl-svg")
+          : null;
       if (m) focusCard(m.dataset.rrId);
     });
     document.addEventListener("keydown", (e) => {

@@ -25,6 +25,14 @@ mark.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
   100% { outline: 3px solid rgba(46, 94, 78, 0); outline-offset: 6px; }
 }
 
+/* ---- SVG diagram highlights (HTML <mark> is invalid inside SVG) ---- */
+svg .rr-hl-svg { cursor: pointer; text-decoration: underline; }
+svg .rr-hl-svg.rr-svg-comment  { fill: #9a7d00 !important; }
+svg .rr-hl-svg.rr-svg-edit     { fill: #b34a2e !important; }
+svg .rr-hl-svg.rr-svg-question { fill: #2f5f96 !important; }
+svg .rr-hl-svg.rr-resolved { opacity: .55; text-decoration: none; }
+svg .rr-hl-svg.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
+
 /* ---- floating comment button ---- */
 #rr-fab {
   position: fixed;
