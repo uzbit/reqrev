@@ -118,6 +118,16 @@ def render_review_html(doc_name, data):
                 + html.escape(a["replacement"])
                 + "</p>"
             )
+        resp = ""
+        if a.get("response"):
+            disp = html.escape(a.get("disposition") or "addressed")
+            resp = (
+                f'<p class="repl"><strong>Response — {disp}:</strong> '
+                + html.escape(a["response"])
+            )
+            if a.get("changes"):
+                resp += "<br>\n<em>Changes:</em> " + html.escape(a["changes"])
+            resp += "</p>"
         comment = html.escape(a.get("comment", "")) or "<em>(no comment)</em>"
         articles.append(
             f"""<article class="ann {html.escape(typ)} {status}">
@@ -125,7 +135,7 @@ def render_review_html(doc_name, data):
 <span class="status">{status}</span></header>
 <blockquote>{html.escape(a.get("exact", ""))}</blockquote>
 <p class="comment">{comment}</p>
-{repl}
+{repl}{resp}
 <p class="meta">created {html.escape(a.get("created", "?"))} · updated {html.escape(a.get("updated", "?"))}</p>
 </article>"""
         )
@@ -172,6 +182,9 @@ code{{font:500 12px ui-monospace,monospace;background:#f0f0e9;padding:1px 5px;bo
   updated, docRev }} — `exact` quotes the reviewed passage in the source
   document, `prefix`/`suffix` give surrounding context for locating it, and
   for type "edit" the `replacement` field holds the proposed new text.
+  Annotations that have been addressed may additionally carry `disposition`
+  (applied | answered | orphaned), `response` (the author's answer or
+  rationale), and `changes` (what was edited as a result).
   `docRev` is the git revision of the source document the annotation was made
   against ("-dirty" suffix = uncommitted changes were present). Top-level
   `status` is "in-progress" or "complete"; when complete, `docRev` and

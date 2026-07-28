@@ -59,6 +59,9 @@ Annotation fields:
 | `comment` | the reviewer's note |
 | `replacement` | for `type: "edit"`, the proposed replacement text |
 | `resolved` | whether the item has been addressed |
+| `disposition` | optional — how it was addressed: `applied`, `answered`, or `orphaned` |
+| `response` | optional — the author's answer or rationale |
+| `changes` | optional — what was edited in the document as a result |
 | `created` / `updated` | ISO-8601 UTC timestamps |
 | `docRev` | git revision of the source doc the annotation was made against (`-dirty` suffix = uncommitted changes were present) |
 
@@ -71,6 +74,9 @@ out that revision to see exactly what the reviewer saw.
 `.review.html` file. Each annotation's `exact` text locates the passage in the
 corresponding source document under the docs directory; apply `replacement`
 text for suggested edits, and answer or address `comment`/`question` items.
+When addressing items, record `disposition`, `response`, and `changes` on each
+annotation and set `resolved: true` — the rendered report shows them as
+response blocks beneath the reviewer's note.
 Annotations are anchored by text content, so they survive edits to the source
 document; if a quoted passage disappears entirely, the app flags it as
 orphaned rather than deleting it.
