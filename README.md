@@ -80,6 +80,13 @@ revision all annotations share, once uniform), and `completedAt`. A `complete`
 review is guaranteed to have all annotations on one committed revision — check
 out that revision to see exactly what the reviewer saw.
 
+Note that `docRev` is the last commit that **touched the document**, not the
+repo HEAD at review time. Commits elsewhere in the repo (other docs, review
+files, tooling) don't change a document's revision, so they can't split an
+in-progress review across "revisions" or block completion. The sidebar shows
+the commit's subject line next to the hash so you can recognize it, and warns
+if the document gains uncommitted changes or new commits mid-review.
+
 **For Claude:** to act on a review, parse the JSON block from the
 `.review.html` file. Each annotation's `exact` text locates the passage in the
 corresponding source document under the docs directory; apply `replacement`

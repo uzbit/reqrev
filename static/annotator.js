@@ -431,6 +431,7 @@
       for (const a of annotations) if (data.stamps[a.id]) a.docRev = data.stamps[a.id];
     meta.status = data.status || "in-progress";
     meta.docRev = data.docRev || null;
+    if (data.docNow) meta.docNow = data.docNow;
     renderMeta();
     return data;
   }
@@ -465,18 +466,31 @@
   }
 
   function renderMeta() {
-    const rev = meta.docRev ? meta.docRev.slice(0, 12) : null;
+    const now = meta.docNow || {};
+    const short = (r) =>
+      r ? (r.endsWith("-dirty") ? r.slice(0, 12) + "…-dirty" : r.slice(0, 12)) : null;
+    const base = meta.docRev || now.rev || null;
+    let out;
     if (meta.status === "complete") {
-      ui.rev.innerHTML = "✓ complete @ <code>" + esc(rev || "?") + "</code>";
+      out = "✓ complete @ <code>" + esc(short(base) || "?") + "</code>";
       ui.rev.className = "rr-rev-done";
       ui.completeBtn.style.display = "none";
     } else {
-      ui.rev.innerHTML = rev
-        ? "in progress @ <code>" + esc(rev) + "</code>"
-        : "in progress";
+      out = base ? "in progress @ <code>" + esc(short(base)) + "</code>" : "in progress";
       ui.rev.className = "";
       ui.completeBtn.style.display = annotations.length ? "" : "none";
     }
+    const stamped = (meta.docRev || "").replace(/-dirty$/, "");
+    if (base && now.subject && (!meta.docRev || stamped === now.rev))
+      out +=
+        ' <span class="rr-revsub" title="' +
+        esc(now.subject + (now.date ? " · " + now.date : "")) +
+        '">' + esc(now.subject) + "</span>";
+    if (now.dirty)
+      out += ' <span class="rr-revwarn" title="the document has uncommitted changes — new annotations will be stamped -dirty">⚠ uncommitted changes</span>';
+    else if (meta.docRev && now.rev && stamped !== now.rev)
+      out += ' <span class="rr-revwarn" title="the document has been committed to since these annotations were made">⚠ document updated since</span>';
+    ui.rev.innerHTML = out;
   }
 
   /* ---------- boot ---------- */
@@ -551,6 +565,7 @@
       annotations = Array.isArray(data.annotations) ? data.annotations : [];
       meta.status = data.status || "in-progress";
       meta.docRev = data.docRev || null;
+      meta.docNow = data.docNow || null;
     } catch (err) {
       annotations = [];
     }

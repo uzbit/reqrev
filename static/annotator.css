@@ -76,6 +76,13 @@ mark.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
   font-size: 12px;
   color: #5c6058;
 }
+#rr-rev {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 #rr-rev code {
   font: 500 11px ui-monospace, monospace;
   background: #f0f0e9;
@@ -83,6 +90,8 @@ mark.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
   border-radius: 3px;
 }
 #rr-rev.rr-rev-done { color: #2e5e4e; font-weight: 600; }
+.rr-revsub { color: #8a8a7e; font-style: italic; }
+.rr-revwarn { color: #a03123; font-weight: 600; }
 #rr-complete {
   margin-left: auto;
   font: 600 11.5px system-ui, sans-serif;

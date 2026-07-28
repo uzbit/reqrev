@@ -43,25 +43,27 @@ def review_path(reviews_dir, doc_name):
 
 
 def git_doc_state(docs_dir, name):
-    """Return (rev, dirty, error): last commit touching the doc, whether the
-    working copy differs from it, and an error string if git info is unavailable."""
+    """Return (rev, dirty, subject, date, error) for the last commit that touched
+    the doc (not repo HEAD — unrelated commits must not invalidate a review)."""
     try:
         r = subprocess.run(
-            ["git", "-C", str(docs_dir), "log", "-1", "--format=%H", "--", name],
+            ["git", "-C", str(docs_dir), "log", "-1",
+             "--format=%H%x09%ad%x09%s", "--date=short", "--", name],
             capture_output=True, text=True, timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return None, False, "git is not available"
+        return None, False, "", "", "git is not available"
     if r.returncode != 0:
-        return None, False, "docs directory is not in a git repository"
-    rev = r.stdout.strip()
-    if not rev:
-        return None, False, f"{name} is not tracked in git (commit it first)"
+        return None, False, "", "", "docs directory is not in a git repository"
+    line = r.stdout.strip()
+    if not line:
+        return None, False, "", "", f"{name} is not tracked in git (commit it first)"
+    rev, date, subject = (line.split("\t", 2) + ["", ""])[:3]
     s = subprocess.run(
         ["git", "-C", str(docs_dir), "status", "--porcelain", "--", name],
         capture_output=True, text=True, timeout=10,
     )
-    return rev, bool(s.stdout.strip()), None
+    return rev, bool(s.stdout.strip()), subject, date, None
 
 
 def load_review(reviews_dir, doc_name):
@@ -328,7 +330,11 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
         def api_get_review(self, name):
             if not safe_name(name):
                 return self.send_error(400)
-            self.send_json(load_review(reviews_dir, name))
+            data = load_review(reviews_dir, name)
+            rev, dirty, subject, date, err = git_doc_state(docs_dir, name)
+            data["docNow"] = {"rev": rev, "dirty": dirty, "subject": subject,
+                              "date": date, "error": err}
+            self.send_json(data)
 
         def api_save_review(self, name):
             if not safe_name(name):
@@ -342,7 +348,7 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             except (ValueError, KeyError, AssertionError):
                 return self.send_json({"ok": False, "error": "bad payload"}, 400)
 
-            rev, dirty, git_err = git_doc_state(docs_dir, name)
+            rev, dirty, subject, date, git_err = git_doc_state(docs_dir, name)
             stamp = (rev + ("-dirty" if dirty else "")) if rev else None
             stamps = {}
             for a in annotations:
@@ -386,7 +392,9 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             reviews_dir.mkdir(parents=True, exist_ok=True)
             path.write_text(render_review_html(name, out), encoding="utf-8")
             self.send_json({"ok": True, "file": str(path), "updated": updated,
-                            "status": status, "docRev": doc_rev, "stamps": stamps})
+                            "status": status, "docRev": doc_rev, "stamps": stamps,
+                            "docNow": {"rev": rev, "dirty": dirty,
+                                       "subject": subject, "date": date}})
 
     return Handler
 
