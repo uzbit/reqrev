@@ -14,8 +14,11 @@ python3 server.py
 # then open http://localhost:8765/
 ```
 
-Defaults: serves docs from `../srts/requirements`, writes reviews to a
-`reviews/` directory next to the docs directory (i.e. `../srts/reviews`).
+Defaults: serves docs from `../srts/requirements` (scanned recursively — doc
+names include their subpath, e.g. `modules/0002-identity-access.html`), writes
+reviews to a `reviews/` directory next to the docs directory (i.e.
+`../srts/reviews`). Review files stay flat, named by document stem, so
+document stems must be unique across the tree.
 Override with:
 
 ```sh

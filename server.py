@@ -38,6 +38,12 @@ def safe_name(name):
     return bool(name) and "/" not in name and "\\" not in name and ".." not in name
 
 
+def safe_doc(name):
+    """Doc names may include subdirectories — docs are discovered recursively."""
+    return (bool(name) and "\\" not in name and ".." not in name
+            and not name.startswith("/"))
+
+
 def review_path(reviews_dir, doc_name):
     return reviews_dir / (Path(doc_name).stem + ".review.html")
 
@@ -249,8 +255,12 @@ def make_handler(docs_dir, reviews_dir):
 
         def page_index(self):
             rows = []
-            for doc in sorted(docs_dir.glob("*.html")):
-                data = load_review(reviews_dir, doc.name)
+            names = sorted(
+                (p.relative_to(docs_dir).as_posix() for p in docs_dir.rglob("*.html")),
+                key=lambda n: Path(n).name,
+            )
+            for name in names:
+                data = load_review(reviews_dir, name)
                 anns = data.get("annotations", [])
                 open_n = sum(1 for a in anns if not a.get("resolved"))
                 counts = "—"
@@ -260,10 +270,10 @@ def make_handler(docs_dir, reviews_dir):
                     if data.get("status") == "complete":
                         counts = (f'<span class="done">✓ complete @ '
                                   f'{html.escape((data.get("docRev") or "")[:8])}</span> · {counts}')
-                    rfile = review_path(reviews_dir, doc.name).name
+                    rfile = review_path(reviews_dir, name).name
                     review_link = f'<a class="rev" href="/reviews/{html.escape(rfile)}">review file</a>'
                 rows.append(
-                    f"""<li><a class="doc" href="/doc/{html.escape(doc.name)}">{html.escape(doc.name)}</a>
+                    f"""<li><a class="doc" href="/doc/{html.escape(name)}">{html.escape(name)}</a>
 <span class="counts">{counts}</span>{review_link}</li>"""
                 )
             listing = "\n".join(rows) or "<li><em>No .html files found in docs directory.</em></li>"
@@ -289,7 +299,7 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
 </body></html>""")
 
         def page_doc(self, name):
-            if not safe_name(name):
+            if not safe_doc(name):
                 return self.send_error(400)
             path = docs_dir / name
             if not path.is_file():
@@ -328,7 +338,7 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             self.send_body(path.read_text(encoding="utf-8"))
 
         def api_get_review(self, name):
-            if not safe_name(name):
+            if not safe_doc(name):
                 return self.send_error(400)
             data = load_review(reviews_dir, name)
             rev, dirty, subject, date, err = git_doc_state(docs_dir, name)
@@ -337,7 +347,7 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             self.send_json(data)
 
         def api_save_review(self, name):
-            if not safe_name(name):
+            if not safe_doc(name):
                 return self.send_error(400)
             try:
                 length = int(self.headers.get("Content-Length", 0))
