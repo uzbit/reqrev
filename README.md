@@ -27,7 +27,11 @@ python3 server.py --docs /path/to/docs --reviews /path/to/reviews --port 8765
 
 ## Workflow
 
-1. Pick a document on the index page.
+1. Pick a document on the index page — or use the search bar (top right of
+   every page, `/` or `Ctrl/⌘-K` to focus). Typing searches the text of all
+   docs; picking a result opens that exact passage, highlighted, in a new tab.
+   A trailing space makes the match end at a token boundary — `D-1 ` matches
+   `D-1` but not `D-10` (a leading space anchors the start the same way).
 2. Select text in the document → click the **✎ Comment** button that appears.
 3. Choose a type (Comment / Suggested edit / Question), write your note —
    suggested edits also take proposed replacement text — and Save.

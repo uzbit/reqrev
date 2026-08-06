@@ -30,7 +30,7 @@
       acceptNode(n) {
         if (!n.nodeValue) return NodeFilter.FILTER_REJECT;
         const p = n.parentElement;
-        if (p && p.closest("#rr-sidebar,#rr-fab,script,style,noscript"))
+        if (p && p.closest("#rr-sidebar,#rr-fab,#rr-search,script,style,noscript"))
           return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       },
@@ -369,7 +369,7 @@
   }
 
   function onMouseUp(e) {
-    if (e.target.closest && e.target.closest("#rr-sidebar,#rr-fab")) return;
+    if (e.target.closest && e.target.closest("#rr-sidebar,#rr-fab,#rr-search")) return;
     setTimeout(() => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) {
@@ -381,7 +381,8 @@
         (sel.anchorNode.nodeType === Node.TEXT_NODE
           ? sel.anchorNode.parentElement
           : sel.anchorNode);
-      if (anchorEl && anchorEl.closest && anchorEl.closest("#rr-sidebar")) return;
+      if (anchorEl && anchorEl.closest && anchorEl.closest("#rr-sidebar,#rr-search"))
+        return;
       const range = sel.getRangeAt(0);
       const captured = captureSelector(range);
       if (!captured) {

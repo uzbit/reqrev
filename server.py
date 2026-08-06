@@ -17,9 +17,10 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlparse
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
@@ -70,6 +71,61 @@ def git_doc_state(docs_dir, name):
         capture_output=True, text=True, timeout=10,
     )
     return rev, bool(s.stdout.strip()), subject, date, None
+
+
+class TextExtractor(HTMLParser):
+    """Flatten a doc to the text a browser DOM walk over <body> would yield
+    (entities decoded, script/style/title skipped), so occurrence numbers
+    computed here line up with the client-side text index in search.js."""
+
+    SKIP = {"script", "style", "noscript", "template", "title"}
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self.pos = 0
+        self.skip = 0
+        self.headings = []  # (start_pos, title) for h1/h2, in document order
+        self._h_start = None
+        self._h_parts = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP:
+            self.skip += 1
+        elif tag in ("h1", "h2") and not self.skip:
+            self._h_start = self.pos
+            self._h_parts = []
+        elif self._h_parts is not None:
+            self._h_parts.append(" ")  # tag boundary inside a heading, e.g. </span>
+
+    def handle_endtag(self, tag):
+        if tag in self.SKIP:
+            self.skip = max(0, self.skip - 1)
+        elif tag in ("h1", "h2") and self._h_parts is not None:
+            self.headings.append(
+                (self._h_start, " ".join("".join(self._h_parts).split()))
+            )
+            self._h_start = self._h_parts = None
+        elif self._h_parts is not None:
+            self._h_parts.append(" ")
+
+    def handle_data(self, data):
+        if self.skip:
+            return
+        self.parts.append(data)
+        self.pos += len(data)
+        if self._h_parts is not None:
+            self._h_parts.append(data)
+
+
+def extract_doc_text(raw):
+    p = TextExtractor()
+    try:
+        p.feed(raw)
+        p.close()
+    except Exception:
+        pass
+    return "".join(p.parts), p.headings
 
 
 def load_review(reviews_dir, doc_name):
@@ -246,6 +302,8 @@ def make_handler(docs_dir, reviews_dir):
                 return self.file_static(path[len("/static/"):])
             if path.startswith("/api/review/"):
                 return self.api_get_review(path[len("/api/review/"):])
+            if path == "/api/search":
+                return self.api_search()
             if path.startswith("/reviews/"):
                 return self.file_review(path[len("/reviews/"):])
             self.send_error(404)
@@ -282,8 +340,10 @@ def make_handler(docs_dir, reviews_dir):
             listing = "\n".join(rows) or "<li><em>No .html files found in docs directory.</em></li>"
             self.send_body(f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>reqrev</title>
+<link rel="stylesheet" href="/static/search.css">
+<script src="/static/search.js" defer></script>
 <style>
-body{{margin:0 auto;max-width:720px;padding:48px 24px;background:#fafaf6;color:#20241f;
+body{{margin:0 auto;max-width:720px;padding:72px 24px 48px;background:#fafaf6;color:#20241f;
   font:400 15.5px/1.7 system-ui,sans-serif}}
 h1{{font-size:24px;margin:0}}
 p.sub{{color:#5c6058;margin:4px 0 30px;font-size:13.5px}}
@@ -310,8 +370,10 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             raw = path.read_text(encoding="utf-8")
             inject = (
                 '<link rel="stylesheet" href="/static/annotator.css">'
+                '<link rel="stylesheet" href="/static/search.css">'
                 f"<script>window.REQREV_DOC={json.dumps(name)}</script>"
                 '<script src="/static/annotator.js" defer></script>'
+                '<script src="/static/search.js" defer></script>'
             )
             m = re.search(r"</body>", raw, re.I)
             if m:
@@ -338,7 +400,70 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             path = reviews_dir / name
             if not path.is_file():
                 return self.send_error(404)
-            self.send_body(path.read_text(encoding="utf-8"))
+            raw = path.read_text(encoding="utf-8")
+            inject = ('<link rel="stylesheet" href="/static/search.css">'
+                      '<script src="/static/search.js" defer></script>')
+            m = re.search(r"</body>", raw, re.I)
+            if m:
+                raw = raw[: m.start()] + inject + raw[m.start():]
+            else:
+                raw += inject
+            self.send_body(raw)
+
+        def api_search(self):
+            MAX_PER_DOC, MAX_TOTAL, CTX = 6, 40, 60
+            qs = parse_qs(urlparse(self.path).query)
+            raw_q = (qs.get("q") or [""])[0]
+            # leading/trailing whitespace on the query demands a token boundary
+            # (non-letter/digit) on that side — "D-1 " matches D-1 but not D-10
+            want_pre = bool(raw_q) and raw_q[0].isspace()
+            want_post = bool(raw_q) and raw_q[-1].isspace()
+            q = raw_q.strip()
+            results = []
+            if len(q) < 2:
+                return self.send_json({"q": raw_q, "results": results})
+            ql = q.lower()
+            names = sorted(
+                (p.relative_to(docs_dir).as_posix() for p in docs_dir.rglob("*.html")),
+                key=lambda n: Path(n).name,
+            )
+            for name in names:
+                if len(results) >= MAX_TOTAL:
+                    break
+                try:
+                    raw = (docs_dir / name).read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                text, headings = extract_doc_text(raw)
+                low = text.lower()
+                shown = 0
+                n = 0  # occurrence number within the doc — the client's locator
+                i = low.find(ql)
+                while i != -1 and shown < MAX_PER_DOC and len(results) < MAX_TOTAL:
+                    j = i + len(ql)
+                    if (want_pre and i > 0 and text[i - 1].isalnum()) or (
+                        want_post and j < len(text) and text[j].isalnum()
+                    ):
+                        i = low.find(ql, i + 1)
+                        continue
+                    section = ""
+                    for start, title in headings:
+                        if start <= i:
+                            section = title
+                        else:
+                            break
+                    results.append({
+                        "doc": name,
+                        "n": n,
+                        "section": section,
+                        "before": re.sub(r"\s+", " ", text[max(0, i - CTX):i]).lstrip(),
+                        "match": re.sub(r"\s+", " ", text[i:i + len(q)]),
+                        "after": re.sub(r"\s+", " ", text[i + len(q):i + len(q) + CTX]).rstrip(),
+                    })
+                    shown += 1
+                    n += 1
+                    i = low.find(ql, i + 1)
+            self.send_json({"q": q, "results": results})
 
         def api_get_review(self, name):
             if not safe_doc(name):
