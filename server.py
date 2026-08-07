@@ -347,8 +347,10 @@ body{{margin:0 auto;max-width:720px;padding:72px 24px 48px;background:#fafaf6;co
   font:400 15.5px/1.7 system-ui,sans-serif}}
 h1{{font-size:24px;margin:0}}
 p.sub{{color:#5c6058;margin:4px 0 30px;font-size:13.5px}}
-ul{{list-style:none;padding:0}}
-li{{display:flex;gap:14px;align-items:baseline;padding:11px 4px;border-bottom:1px solid #e2e1d7}}
+ul{{list-style:none;padding:0;width:fit-content;min-width:100%;
+  max-width:calc(100vw - 48px);margin-left:50%;transform:translateX(-50%)}}
+li{{display:flex;gap:14px;align-items:baseline;padding:11px 4px;
+  border-bottom:1px solid #e2e1d7;white-space:nowrap}}
 a.doc{{color:#2e5e4e;font-weight:600;text-decoration:none}}
 a.doc:hover{{text-decoration:underline}}
 .counts{{color:#5c6058;font-size:13px;margin-left:auto}}
