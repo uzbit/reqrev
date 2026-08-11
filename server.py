@@ -271,7 +271,32 @@ code{{font:500 12px ui-monospace,monospace;background:#f0f0e9;padding:1px 5px;bo
 """
 
 
-def make_handler(docs_dir, reviews_dir):
+STORIES = "stories/"
+
+
+def make_handler(docs_dir, stories_dir, reviews_dir):
+    def resolve(name):
+        """Map a display name to (root_dir, path relative to that root).
+        Names under the stories/ prefix live in the stories directory."""
+        if stories_dir and name.startswith(STORIES):
+            return stories_dir, name[len(STORIES):]
+        return docs_dir, name
+
+    def list_docs():
+        req = sorted(
+            (p.relative_to(docs_dir).as_posix() for p in docs_dir.rglob("*.html")),
+            key=lambda n: Path(n).name,
+        )
+        stories = []
+        if stories_dir:
+            stories = sorted(
+                (STORIES + p.relative_to(stories_dir).as_posix()
+                 for p in stories_dir.rglob("*.html")
+                 if p.name != "STORY-TEMPLATE.html"),
+                key=lambda n: Path(n).name,
+            )
+        return req, stories
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "reqrev/1.0"
 
@@ -314,30 +339,52 @@ def make_handler(docs_dir, reviews_dir):
                 return self.api_save_review(path[len("/api/review/"):])
             self.send_error(404)
 
-        def page_index(self):
-            rows = []
-            names = sorted(
-                (p.relative_to(docs_dir).as_posix() for p in docs_dir.rglob("*.html")),
-                key=lambda n: Path(n).name,
-            )
-            for name in names:
-                data = load_review(reviews_dir, name)
-                anns = data.get("annotations", [])
-                open_n = sum(1 for a in anns if not a.get("resolved"))
-                counts = "—"
-                review_link = ""
-                if anns or data.get("status") == "complete":
-                    counts = f"{open_n} open / {len(anns) - open_n} resolved"
-                    if data.get("status") == "complete":
-                        counts = (f'<span class="done">✓ complete @ '
-                                  f'{html.escape((data.get("docRev") or "")[:8])}</span> · {counts}')
-                    rfile = review_path(reviews_dir, name).name
-                    review_link = f'<a class="rev" href="/reviews/{html.escape(rfile)}">review file</a>'
-                rows.append(
-                    f"""<li><a class="doc" href="/doc/{html.escape(name)}">{html.escape(name)}</a>
+        def doc_row(self, name, label, badge=""):
+            data = load_review(reviews_dir, name)
+            anns = data.get("annotations", [])
+            open_n = sum(1 for a in anns if not a.get("resolved"))
+            counts = "—"
+            review_link = ""
+            if anns or data.get("status") == "complete":
+                counts = f"{open_n} open / {len(anns) - open_n} resolved"
+                if data.get("status") == "complete":
+                    counts = (f'<span class="done">✓ complete @ '
+                              f'{html.escape((data.get("docRev") or "")[:8])}</span> · {counts}')
+                rfile = review_path(reviews_dir, name).name
+                review_link = f'<a class="rev" href="/reviews/{html.escape(rfile)}">review file</a>'
+            return (
+                f"""<li><a class="doc" href="/doc/{html.escape(name)}">{html.escape(label)}</a>{badge}
 <span class="counts">{counts}</span>{review_link}</li>"""
+            )
+
+        def story_badge(self, name):
+            root, rel = resolve(name)
+            try:
+                raw = (root / rel).read_text(encoding="utf-8")
+            except OSError:
+                return ""
+            m = re.search(r"Status:\s*([A-Za-z]+)", raw)
+            if not m:
+                return ""
+            st = m.group(1)
+            return f' <span class="st st-{st.lower()}">{html.escape(st)}</span>'
+
+        def page_index(self):
+            req_names, story_names = list_docs()
+            listing = "\n".join(self.doc_row(n, n) for n in req_names) \
+                or "<li><em>No .html files found in docs directory.</em></li>"
+            story_section = ""
+            if story_names:
+                srows = "\n".join(
+                    self.doc_row(n, n[len(STORIES):], self.story_badge(n))
+                    for n in story_names
                 )
-            listing = "\n".join(rows) or "<li><em>No .html files found in docs directory.</em></li>"
+                story_section = f"<h2>Stories</h2>\n<ul>{srows}</ul>"
+            sub = (f"requirement review — docs from <code>{html.escape(str(docs_dir))}</code>"
+                   + (f", stories from <code>{html.escape(str(stories_dir))}</code>"
+                      if stories_dir else "")
+                   + f",\nreviews saved to <code>{html.escape(str(reviews_dir))}</code>")
+            req_heading = "<h2>Requirements</h2>" if story_section else ""
             self.send_body(f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>reqrev</title>
 <link rel="stylesheet" href="/static/search.css">
@@ -346,6 +393,8 @@ def make_handler(docs_dir, reviews_dir):
 body{{margin:0 auto;max-width:720px;padding:72px 24px 48px;background:#fafaf6;color:#20241f;
   font:400 15.5px/1.7 system-ui,sans-serif}}
 h1{{font-size:24px;margin:0}}
+h2{{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:#5c6058;
+  margin:36px 0 2px}}
 p.sub{{color:#5c6058;margin:4px 0 30px;font-size:13.5px}}
 ul{{list-style:none;padding:0;width:fit-content;min-width:100%;
   max-width:calc(100vw - 48px);margin-left:50%;transform:translateX(-50%)}}
@@ -356,17 +405,24 @@ a.doc:hover{{text-decoration:underline}}
 .counts{{color:#5c6058;font-size:13px;margin-left:auto}}
 .counts .done{{color:#2e5e4e;font-weight:600}}
 a.rev{{color:#35566b;font-size:13px}}
+.st{{font:700 10px/1 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 7px;border-radius:3px;background:#f0f0e9;color:#5c6058}}
+.st-done,.st-approved{{background:#e9f1ec;color:#2e5e4e}}
+.st-inprogress{{background:#e9eff4;color:#35566b}}
+.st-review{{background:#f7eeda;color:#6e5316}}
+.st-blocked{{background:#fbe0dc;color:#a03123}}
 </style></head><body>
 <h1>reqrev</h1>
-<p class="sub">requirement review — docs from <code>{html.escape(str(docs_dir))}</code>,
-reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
-<ul>{listing}</ul>
+<p class="sub">{sub}</p>
+{req_heading}<ul>{listing}</ul>
+{story_section}
 </body></html>""")
 
         def page_doc(self, name):
             if not safe_doc(name):
                 return self.send_error(400)
-            path = docs_dir / name
+            root, rel = resolve(name)
+            path = root / rel
             if not path.is_file():
                 return self.send_error(404)
             raw = path.read_text(encoding="utf-8")
@@ -425,15 +481,13 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             if len(q) < 2:
                 return self.send_json({"q": raw_q, "results": results})
             ql = q.lower()
-            names = sorted(
-                (p.relative_to(docs_dir).as_posix() for p in docs_dir.rglob("*.html")),
-                key=lambda n: Path(n).name,
-            )
-            for name in names:
+            req_names, story_names = list_docs()
+            for name in req_names + story_names:
                 if len(results) >= MAX_TOTAL:
                     break
+                root, rel = resolve(name)
                 try:
-                    raw = (docs_dir / name).read_text(encoding="utf-8")
+                    raw = (root / rel).read_text(encoding="utf-8")
                 except OSError:
                     continue
                 text, headings = extract_doc_text(raw)
@@ -471,7 +525,7 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             if not safe_doc(name):
                 return self.send_error(400)
             data = load_review(reviews_dir, name)
-            rev, dirty, subject, date, err = git_doc_state(docs_dir, name)
+            rev, dirty, subject, date, err = git_doc_state(*resolve(name))
             data["docNow"] = {"rev": rev, "dirty": dirty, "subject": subject,
                               "date": date, "error": err}
             self.send_json(data)
@@ -488,7 +542,7 @@ reviews saved to <code>{html.escape(str(reviews_dir))}</code></p>
             except (ValueError, KeyError, AssertionError):
                 return self.send_json({"ok": False, "error": "bad payload"}, 400)
 
-            rev, dirty, subject, date, git_err = git_doc_state(docs_dir, name)
+            rev, dirty, subject, date, git_err = git_doc_state(*resolve(name))
             stamp = (rev + ("-dirty" if dirty else "")) if rev else None
             stamps = {}
             for a in annotations:
@@ -552,6 +606,10 @@ def main():
     ap.add_argument("--reviews", default=None,
                     help="directory where .review.html files are written "
                          "(default: <docs parent>/reviews)")
+    ap.add_argument("--stories", default=None,
+                    help="directory containing story .html files, listed in their "
+                         "own index section (default: <docs parent>/stories; "
+                         "skipped if absent)")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
 
@@ -561,9 +619,18 @@ def main():
     reviews_dir = (
         Path(args.reviews).resolve() if args.reviews else docs_dir.parent / "reviews"
     )
+    stories_dir = (
+        Path(args.stories).resolve() if args.stories else docs_dir.parent / "stories"
+    )
+    if not stories_dir.is_dir():
+        stories_dir = None
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(docs_dir, reviews_dir))
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", args.port), make_handler(docs_dir, stories_dir, reviews_dir)
+    )
     print(f"reqrev serving {docs_dir}")
+    if stories_dir:
+        print(f"stories  -> {stories_dir}")
     print(f"reviews  -> {reviews_dir}")
     print(f"open     http://localhost:{args.port}/")
     try:

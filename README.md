@@ -19,10 +19,15 @@ names include their subpath, e.g. `modules/0002-identity-access.html`), writes
 reviews to a `reviews/` directory next to the docs directory (i.e.
 `../srts/reviews`). Review files stay flat, named by document stem, so
 document stems must be unique across the tree.
+If a `stories/` directory exists next to the docs directory (i.e.
+`../srts/stories`), its documents are listed in their own index section under
+`stories/` names, each with the status badge parsed from the story's
+`Status:` meta line. They are searched and reviewed like any other doc.
 Override with:
 
 ```sh
-python3 server.py --docs /path/to/docs --reviews /path/to/reviews --port 8765
+python3 server.py --docs /path/to/docs --reviews /path/to/reviews \
+                  --stories /path/to/stories --port 8765
 ```
 
 ## Workflow
