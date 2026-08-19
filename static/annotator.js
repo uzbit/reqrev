@@ -6,6 +6,9 @@
 
   const TYPES = { comment: "Comment", edit: "Suggested edit", question: "Question" };
   const CONTEXT = 32;
+  const PANEL_KEY = "reqrev-panel";
+  /* reqrev's own furniture — never part of the document's text index */
+  const CHROME = "#rr-sidebar,#rr-fab,#rr-search,#rr-rail";
 
   let annotations = [];
   let meta = { status: "in-progress", docRev: null };
@@ -30,7 +33,7 @@
       acceptNode(n) {
         if (!n.nodeValue) return NodeFilter.FILTER_REJECT;
         const p = n.parentElement;
-        if (p && p.closest("#rr-sidebar,#rr-fab,#rr-search,script,style,noscript"))
+        if (p && p.closest(CHROME + ",script,style,noscript"))
           return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       },
@@ -144,7 +147,7 @@
   function sectionFor(node) {
     let best = null;
     for (const h of document.querySelectorAll("h2[id], h2, h1")) {
-      if (h.closest("#rr-sidebar")) continue;
+      if (h.closest(CHROME)) continue;
       if (h.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) best = h;
       else if (h.contains(node)) best = h;
     }
@@ -184,11 +187,27 @@
     renderSidebar();
   }
 
+  /* ---------- collapse / expand the panel ---------- */
+
+  function setCollapsed(v, quiet) {
+    document.documentElement.classList.toggle("rr-collapsed", !!v);
+    if (!quiet) {
+      try {
+        localStorage.setItem(PANEL_KEY, v ? "collapsed" : "open");
+      } catch (err) {
+        /* private mode — the panel just won't remember */
+      }
+    }
+  }
+
   function renderSidebar() {
     const open = annotations.filter((a) => !a.resolved).length;
     ui.count.textContent = annotations.length
       ? `${open} open · ${annotations.length - open} resolved`
       : "";
+    ui.railLabel.textContent = annotations.length
+      ? `Review · ${open} open`
+      : "Review";
     ui.hint.style.display = annotations.length ? "none" : "";
     ui.cards.innerHTML = "";
     for (const ann of annotations) ui.cards.appendChild(cardFor(ann));
@@ -327,6 +346,7 @@
   }
 
   function focusCard(id) {
+    setCollapsed(false); // no point highlighting a card behind a hidden panel
     const card = ui.cards.querySelector(`[data-rr-id="${id}"]`);
     if (!card) return;
     card.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -369,7 +389,7 @@
   }
 
   function onMouseUp(e) {
-    if (e.target.closest && e.target.closest("#rr-sidebar,#rr-fab,#rr-search")) return;
+    if (e.target.closest && e.target.closest(CHROME)) return;
     setTimeout(() => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) {
@@ -381,8 +401,7 @@
         (sel.anchorNode.nodeType === Node.TEXT_NODE
           ? sel.anchorNode.parentElement
           : sel.anchorNode);
-      if (anchorEl && anchorEl.closest && anchorEl.closest("#rr-sidebar,#rr-search"))
-        return;
+      if (anchorEl && anchorEl.closest && anchorEl.closest(CHROME)) return;
       const range = sel.getRangeAt(0);
       const captured = captureSelector(range);
       if (!captured) {
@@ -410,6 +429,7 @@
     annotations.push(ann);
     hideFab();
     window.getSelection().removeAllRanges();
+    setCollapsed(false); // the editor opens in the panel — show it
     renderAll();
     openEditor(ann.id, true);
   }
@@ -521,6 +541,7 @@
           <span id="rr-count"></span>
           <span id="rr-status"></span>
           <a href="/" title="back to document list">index</a>
+          <button id="rr-hide" title="collapse the review panel">»</button>
         </div>
         <div class="rr-h2">
           <span id="rr-rev"></span>
@@ -540,18 +561,32 @@
     fab.addEventListener("mousedown", (e) => e.preventDefault());
     fab.addEventListener("click", onFabClick);
 
+    // the collapsed panel leaves this rail behind to bring it back
+    const rail = document.createElement("button");
+    rail.id = "rr-rail";
+    rail.title = "show the review panel";
+    rail.innerHTML = '<span class="rr-rail-arrow">«</span>' +
+      '<span class="rr-rail-label" id="rr-rail-label">Review</span>';
+    document.body.appendChild(rail);
+    rail.addEventListener("click", () => setCollapsed(false));
+
     document.documentElement.classList.add("rr-active");
     ui = {
       sb,
       fab,
+      rail,
       cards: sb.querySelector("#rr-cards"),
       status: sb.querySelector("#rr-status"),
       count: sb.querySelector("#rr-count"),
       hint: sb.querySelector("#rr-hint"),
       rev: sb.querySelector("#rr-rev"),
       completeBtn: sb.querySelector("#rr-complete"),
+      hideBtn: sb.querySelector("#rr-hide"),
+      railLabel: rail.querySelector("#rr-rail-label"),
     };
     ui.completeBtn.addEventListener("click", completeReview);
+    ui.hideBtn.addEventListener("click", () => setCollapsed(true));
+    setCollapsed(localStorage.getItem(PANEL_KEY) === "collapsed", true);
 
     document.addEventListener("mouseup", onMouseUp);
     window.addEventListener("scroll", hideFab, { passive: true });

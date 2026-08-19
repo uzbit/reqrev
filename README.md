@@ -40,6 +40,9 @@ python3 server.py --docs /path/to/docs --reviews /path/to/reviews \
    A trailing space makes the match end at a token boundary — `D-1 ` matches
    `D-1` but not `D-10` (a leading space anchors the start the same way).
 2. Select text in the document → click the **✎ Comment** button that appears.
+   The review panel collapses to a slim rail with **»** (and comes back from
+   the rail) when you want the document full-width; the choice is remembered,
+   and annotating reopens the panel on its own.
 3. Choose a type (Comment / Suggested edit / Question), write your note —
    suggested edits also take proposed replacement text — and Save.
 4. Everything autosaves to `reviews/<doc>.review.html`. Highlights and the

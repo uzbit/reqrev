@@ -2,6 +2,11 @@
 
 html.rr-active body {
   padding-right: 400px;
+  transition: padding-right .2s ease;
+}
+/* collapsed: the panel slides out, leaving only the rail's width */
+html.rr-active.rr-collapsed body {
+  padding-right: 46px;
 }
 
 /* ---- wide tables: use the visible width, not just the text column ----
@@ -14,6 +19,9 @@ html.rr-active table {
   max-width: calc(100vw - 400px - 48px);
   margin-left: 50%;
   transform: translateX(-50%);
+}
+html.rr-active.rr-collapsed table {
+  max-width: calc(100vw - 46px - 48px);
 }
 
 /* ---- highlights ---- */
@@ -72,7 +80,47 @@ svg .rr-hl-svg.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
   font: 400 13.5px/1.5 system-ui, sans-serif;
   color: #20241f;
   box-sizing: border-box;
+  transition: transform .2s ease;
 }
+html.rr-collapsed #rr-sidebar {
+  transform: translateX(100%);
+  visibility: hidden;
+}
+
+/* ---- rail: all that remains of a collapsed panel ---- */
+#rr-rail {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 46px;
+  z-index: 99998;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  background: #fafaf6;
+  border: none;
+  border-left: 1px solid #d8d7cc;
+  cursor: pointer;
+  font: 600 11px/1 system-ui, sans-serif;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #5c6058;
+}
+html.rr-collapsed #rr-rail { display: flex; }
+#rr-rail:hover { background: #f0f0e9; color: #2e5e4e; }
+.rr-rail-arrow { font-size: 15px; letter-spacing: 0; }
+.rr-rail-label { writing-mode: vertical-rl; text-orientation: mixed; }
+
+#rr-hide {
+  font: 600 14px/1 system-ui, sans-serif;
+  color: #8a8a7e;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+}
+#rr-hide:hover { color: #2e5e4e; }
 #rr-sidebar *, #rr-sidebar *::before, #rr-sidebar *::after { box-sizing: border-box; }
 
 #rr-sidebar header {
@@ -240,6 +288,8 @@ svg .rr-hl-svg.rr-flash { animation: rr-pulse 1.2s ease-out 1; }
 
 @media (max-width: 1100px) {
   html.rr-active body { padding-right: 340px; }
+  html.rr-active.rr-collapsed body { padding-right: 46px; }
   html.rr-active table { max-width: calc(100vw - 340px - 48px); }
+  html.rr-active.rr-collapsed table { max-width: calc(100vw - 46px - 48px); }
   #rr-sidebar { width: 330px; }
 }

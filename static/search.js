@@ -145,7 +145,7 @@
       acceptNode(n) {
         if (!n.nodeValue) return NodeFilter.FILTER_REJECT;
         const p = n.parentElement;
-        if (p && p.closest("#rr-sidebar,#rr-fab,#rr-search,script,style,noscript"))
+        if (p && p.closest("#rr-sidebar,#rr-fab,#rr-search,#rr-rail,script,style,noscript"))
           return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       },

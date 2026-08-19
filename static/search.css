@@ -9,9 +9,11 @@
   color: #20241f;
 }
 /* on doc pages the annotator sidebar owns the right edge — sit just left of it */
-html.rr-active #rr-search { right: 392px; }
+html.rr-active #rr-search { right: 392px; transition: right .2s ease; }
+html.rr-active.rr-collapsed #rr-search { right: 58px; }
 @media (max-width: 1100px) {
   html.rr-active #rr-search { right: 342px; }
+  html.rr-active.rr-collapsed #rr-search { right: 58px; }
 }
 #rr-search input {
   width: 230px;
