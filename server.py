@@ -338,22 +338,64 @@ def make_handler(docs_dir, stories_dir, reviews_dir):
             self.send_error(404)
 
         def doc_row(self, name, label, badge=""):
+            """Returns (row html, {"complete": 0|1, "open": n})."""
             data = load_review(reviews_dir, name)
             anns = data.get("annotations", [])
             open_n = sum(1 for a in anns if not a.get("resolved"))
+            complete = data.get("status") == "complete"
             counts = "—"
             review_link = ""
-            if anns or data.get("status") == "complete":
+            if anns or complete:
                 counts = f"{open_n} open / {len(anns) - open_n} resolved"
-                if data.get("status") == "complete":
+                if complete:
                     counts = (f'<span class="done">✓ complete @ '
                               f'{html.escape((data.get("docRev") or "")[:8])}</span> · {counts}')
                 rfile = review_path(reviews_dir, name).name
                 review_link = f'<a class="rev" href="/reviews/{html.escape(rfile)}">review file</a>'
-            return (
-                f"""<li><a class="doc" href="/doc/{html.escape(name)}">{html.escape(label)}</a>{badge}
-<span class="counts">{counts}</span>{review_link}</li>"""
+            row = (
+                f"""<div class="row"><a class="doc" href="/doc/{html.escape(name)}">{html.escape(label)}</a>{badge}
+<span class="counts">{counts}</span>{review_link}</div>"""
             )
+            return row, {"complete": int(complete), "open": open_n}
+
+        def doc_tree(self, names, strip=""):
+            """Nest display names into {segment: subtree}; files live under ""."""
+            tree = {}
+            for n in names:
+                parts = (n[len(strip):] if strip else n).split("/")
+                node = tree
+                for seg in parts[:-1]:
+                    node = node.setdefault(seg, {})
+                node.setdefault("", []).append((n, parts[-1]))
+            return tree
+
+        def render_tree(self, node, badge_fn=None, path=""):
+            """Files first, then a collapsible <details> per subdirectory.
+            Returns (html, total docs, complete, open annotations)."""
+            out, total, done, opens = [], 0, 0, 0
+            for name, label in node.get("", []):
+                row, st = self.doc_row(name, label,
+                                       badge_fn(name) if badge_fn else "")
+                out.append(row)
+                total += 1
+                done += st["complete"]
+                opens += st["open"]
+            for seg in sorted(k for k in node if k != ""):
+                key = path + seg
+                inner, t, d, o = self.render_tree(node[seg], badge_fn, key + "/")
+                total, done, opens = total + t, done + d, opens + o
+                meta = f"{t} doc{'' if t == 1 else 's'}"
+                if d:
+                    meta += f' · <span class="done">{d} complete</span>'
+                if o:
+                    meta += f" · {o} open"
+                out.append(
+                    f'<details class="grp" open data-k="{html.escape(key)}">'
+                    f'<summary><span class="dir">{html.escape(seg)}/</span>'
+                    f'<span class="gmeta">{meta}</span></summary>'
+                    f'<div class="kids">{inner}</div></details>'
+                )
+            return "\n".join(out), total, done, opens
 
         def story_badge(self, name):
             root, rel = resolve(name)
@@ -369,20 +411,20 @@ def make_handler(docs_dir, stories_dir, reviews_dir):
 
         def page_index(self):
             req_names, story_names = list_docs()
-            listing = "\n".join(self.doc_row(n, n) for n in req_names) \
-                or "<li><em>No .html files found in docs directory.</em></li>"
+            listing = self.render_tree(self.doc_tree(req_names))[0] \
+                or "<p><em>No .html files found in docs directory.</em></p>"
             story_section = ""
             if story_names:
-                srows = "\n".join(
-                    self.doc_row(n, n[len(STORIES):], self.story_badge(n))
-                    for n in story_names
-                )
-                story_section = f"<h2>Stories</h2>\n<ul>{srows}</ul>"
+                srows = self.render_tree(
+                    self.doc_tree(story_names, STORIES),
+                    self.story_badge, STORIES,
+                )[0]
+                story_section = f'<h2>Stories</h2>\n<div class="list">{srows}</div>'
             sub = (f"requirement review — docs from <code>{html.escape(str(docs_dir))}</code>"
                    + (f", stories from <code>{html.escape(str(stories_dir))}</code>"
                       if stories_dir else "")
                    + f",\nreviews saved to <code>{html.escape(str(reviews_dir))}</code>")
-            req_heading = "<h2>Requirements</h2>" if story_section else ""
+            req_heading = "<h2>Requirements</h2>"
             self.send_body(f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>reqrev</title>
 <link rel="stylesheet" href="/static/search.css">
@@ -392,12 +434,30 @@ body{{margin:0 auto;max-width:720px;padding:72px 24px 48px;background:#fafaf6;co
   font:400 15.5px/1.7 system-ui,sans-serif}}
 h1{{font-size:24px;margin:0}}
 h2{{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:#5c6058;
-  margin:36px 0 2px}}
+  margin:36px 0 2px;display:flex;align-items:baseline;gap:12px}}
+h2 button{{font:600 10.5px system-ui,sans-serif;letter-spacing:.06em;
+  text-transform:uppercase;color:#35566b;background:none;border:none;
+  padding:0;cursor:pointer}}
+h2 button:hover{{text-decoration:underline}}
 p.sub{{color:#5c6058;margin:4px 0 30px;font-size:13.5px}}
-ul{{list-style:none;padding:0;width:fit-content;min-width:100%;
-  max-width:calc(100vw - 48px);margin-left:50%;transform:translateX(-50%)}}
-li{{display:flex;gap:14px;align-items:baseline;padding:11px 4px;
+.list{{width:fit-content;min-width:100%;max-width:calc(100vw - 48px)}}
+.row{{display:flex;gap:14px;align-items:baseline;padding:11px 4px;
   border-bottom:1px solid #e2e1d7;white-space:nowrap}}
+details.grp{{border-bottom:1px solid #e2e1d7}}
+details.grp>summary{{display:flex;gap:10px;align-items:baseline;padding:10px 4px;
+  cursor:pointer;list-style:none;white-space:nowrap}}
+summary::-webkit-details-marker{{display:none}}
+summary::before{{content:"";width:0;height:0;border:5px solid transparent;
+  border-left-color:#9a9a8c;align-self:center;margin-right:2px;
+  transition:transform .12s ease}}
+summary:hover::before{{border-left-color:#2e5e4e}}
+details[open]>summary::before{{transform:rotate(90deg) translateX(-1px)}}
+summary:hover .dir{{color:#2e5e4e}}
+.dir{{font-weight:600;color:#3c3c34}}
+.gmeta{{margin-left:auto;color:#8a8a7e;font-size:13px}}
+.gmeta .done{{color:#2e5e4e;font-weight:600}}
+.kids{{margin-left:5px;padding-left:19px;border-left:2px solid #eceadf}}
+.kids>.row:last-child,.kids>details.grp:last-child{{border-bottom:none}}
 a.doc{{color:#2e5e4e;font-weight:600;text-decoration:none}}
 a.doc:hover{{text-decoration:underline}}
 .counts{{color:#5c6058;font-size:13px;margin-left:auto}}
@@ -412,8 +472,49 @@ a.rev{{color:#35566b;font-size:13px}}
 </style></head><body>
 <h1>reqrev</h1>
 <p class="sub">{sub}</p>
-{req_heading}<ul>{listing}</ul>
+{req_heading}<div class="list">{listing}</div>
 {story_section}
+<script>
+/* remember which directory groups are collapsed across reloads */
+(() => {{
+  const KEY = "reqrev-collapsed";
+  /* Freeze each list at its fully-expanded width — measured now, while the
+     server-rendered markup still has every group open — so toggling a group
+     never reflows the section sideways. Lists start at the text column's left
+     edge and grow right, so that edge is fixed and the width can be clamped
+     to whatever room is left. */
+  const lists = [...document.querySelectorAll(".list")];
+  const natural = lists.map((l) => l.getBoundingClientRect().width);
+  const fit = () => lists.forEach((l, i) => {{
+    const left = l.getBoundingClientRect().left;
+    l.style.width = Math.min(natural[i], window.innerWidth - left - 24) + "px";
+  }});
+  fit();
+  window.addEventListener("resize", fit);
+
+  const shut = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+  const groups = [...document.querySelectorAll("details.grp")];
+  for (const d of groups) if (shut.has(d.dataset.k)) d.open = false;
+  const save = () => localStorage.setItem(KEY, JSON.stringify(
+    groups.filter((d) => !d.open).map((d) => d.dataset.k)));
+  for (const d of groups) d.addEventListener("toggle", save);
+  for (const h of document.querySelectorAll("h2")) {{
+    const list = h.nextElementSibling;
+    const inner = [...list.querySelectorAll("details.grp")];
+    if (!inner.length) continue;
+    const btn = document.createElement("button");
+    const sync = () => {{ btn.textContent = inner.some((d) => d.open) ? "collapse all" : "expand all"; }};
+    btn.addEventListener("click", () => {{
+      const opening = !inner.some((d) => d.open);
+      inner.forEach((d) => {{ d.open = opening; }});
+      sync();
+    }});
+    inner.forEach((d) => d.addEventListener("toggle", sync));
+    sync();
+    h.appendChild(btn);
+  }}
+}})();
+</script>
 </body></html>""")
 
         def page_doc(self, name):

@@ -32,8 +32,10 @@ python3 server.py --docs /path/to/docs --reviews /path/to/reviews \
 
 ## Workflow
 
-1. Pick a document on the index page — or use the search bar (top right of
-   every page, `/` or `Ctrl/⌘-K` to focus). Typing searches the text of all
+1. Pick a document on the index page — subdirectories are collapsible groups
+   showing their doc and completion counts, and which ones you collapse is
+   remembered across reloads. Or use the search bar (top right of every page,
+   `/` or `Ctrl/⌘-K` to focus). Typing searches the text of all
    docs; picking a result opens that exact passage, highlighted, in a new tab.
    A trailing space makes the match end at a token boundary — `D-1 ` matches
    `D-1` but not `D-10` (a leading space anchors the start the same way).
