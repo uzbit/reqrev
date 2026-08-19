@@ -284,16 +284,14 @@ def make_handler(docs_dir, stories_dir, reviews_dir):
 
     def list_docs():
         req = sorted(
-            (p.relative_to(docs_dir).as_posix() for p in docs_dir.rglob("*.html")),
-            key=lambda n: Path(n).name,
+            p.relative_to(docs_dir).as_posix() for p in docs_dir.rglob("*.html")
         )
         stories = []
         if stories_dir:
             stories = sorted(
-                (STORIES + p.relative_to(stories_dir).as_posix()
-                 for p in stories_dir.rglob("*.html")
-                 if p.name != "STORY-TEMPLATE.html"),
-                key=lambda n: Path(n).name,
+                STORIES + p.relative_to(stories_dir).as_posix()
+                for p in stories_dir.rglob("*.html")
+                if p.name != "STORY-TEMPLATE.html"
             )
         return req, stories
 
